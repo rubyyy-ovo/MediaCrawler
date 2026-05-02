@@ -30,7 +30,7 @@ COOKIES = ""
 CRAWLER_TYPE = (
     "search"  # Crawling type, search (keyword search) | detail (post details) | creator (creator homepage data)
 )
-# 注意：search 模式下会先按 KEYWORDS 全局搜索，再按 TIEBA_NAME_LIST 逐吧浏览
+# 注意：search 模式下，若 TIEBA_NAME_LIST 非空则在各指定吧内按 KEYWORDS 搜索；为空则全站搜索
 # Whether to enable IP proxy
 ENABLE_IP_PROXY = False
 

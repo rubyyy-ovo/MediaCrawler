@@ -131,9 +131,7 @@ class TieBaCrawler(AbstractCrawler):
 
             crawler_type_var.set(config.CRAWLER_TYPE)
             if config.CRAWLER_TYPE == "search":
-                # Search for notes and retrieve their comment information.
                 await self.search()
-                await self.get_specified_tieba_notes()
             elif config.CRAWLER_TYPE == "detail":
                 # Get the information and comments of the specified post
                 await self.get_specified_notes()
@@ -148,8 +146,8 @@ class TieBaCrawler(AbstractCrawler):
     async def search(self) -> None:
         """
         Search for notes and retrieve their comment information.
-        Returns:
-
+        When TIEBA_NAME_LIST is specified, searches each keyword within each bar.
+        Otherwise falls back to global keyword search.
         """
         utils.logger.info(
             "[BaiduTieBaCrawler.search] Begin search baidu tieba keywords"
@@ -158,54 +156,71 @@ class TieBaCrawler(AbstractCrawler):
         if config.CRAWLER_MAX_NOTES_COUNT < tieba_limit_count:
             config.CRAWLER_MAX_NOTES_COUNT = tieba_limit_count
         start_page = config.START_PAGE
+
+        tieba_name_list = config.TIEBA_NAME_LIST if config.TIEBA_NAME_LIST else [None]
+
         for keyword in config.KEYWORDS.split(","):
+            keyword = keyword.strip()
+            if not keyword:
+                continue
             source_keyword_var.set(keyword)
-            utils.logger.info(
-                f"[BaiduTieBaCrawler.search] Current search keyword: {keyword}"
-            )
-            page = 1
-            while (
-                page - start_page + 1
-            ) * tieba_limit_count <= config.CRAWLER_MAX_NOTES_COUNT:
-                if page < start_page:
-                    utils.logger.info(f"[BaiduTieBaCrawler.search] Skip page {page}")
-                    page += 1
-                    continue
-                try:
+            for tieba_name in tieba_name_list:
+                if tieba_name:
                     utils.logger.info(
-                        f"[BaiduTieBaCrawler.search] search tieba keyword: {keyword}, page: {page}"
+                        f"[BaiduTieBaCrawler.search] Searching keyword '{keyword}' in bar '{tieba_name}'"
                     )
-                    notes_list: List[TiebaNote] = (
-                        await self.tieba_client.get_notes_by_keyword(
-                            keyword=keyword,
-                            page=page,
-                            page_size=tieba_limit_count,
-                            sort=SearchSortType.TIME_DESC,
-                            note_type=SearchNoteType.FIXED_THREAD,
-                        )
+                else:
+                    utils.logger.info(
+                        f"[BaiduTieBaCrawler.search] Searching keyword '{keyword}' globally"
                     )
-                    if not notes_list:
+                page = 1
+                while (
+                    page - start_page + 1
+                ) * tieba_limit_count <= config.CRAWLER_MAX_NOTES_COUNT:
+                    if page < start_page:
+                        utils.logger.info(f"[BaiduTieBaCrawler.search] Skip page {page}")
+                        page += 1
+                        continue
+                    try:
+                        if tieba_name:
+                            notes_list: List[TiebaNote] = (
+                                await self.tieba_client.get_notes_by_keyword_in_tieba(
+                                    tieba_name=tieba_name,
+                                    keyword=keyword,
+                                    page=page,
+                                    page_size=tieba_limit_count,
+                                )
+                            )
+                        else:
+                            notes_list = (
+                                await self.tieba_client.get_notes_by_keyword(
+                                    keyword=keyword,
+                                    page=page,
+                                    page_size=tieba_limit_count,
+                                    sort=SearchSortType.TIME_DESC,
+                                    note_type=SearchNoteType.FIXED_THREAD,
+                                )
+                            )
+                        if not notes_list:
+                            utils.logger.info(
+                                f"[BaiduTieBaCrawler.search] Search note list is empty, stopping"
+                            )
+                            break
                         utils.logger.info(
-                            f"[BaiduTieBaCrawler.search] Search note list is empty"
+                            f"[BaiduTieBaCrawler.search] Note list len: {len(notes_list)}"
+                        )
+                        await self.get_specified_notes(
+                            note_id_list=[note_detail.note_id for note_detail in notes_list]
+                        )
+
+                        await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
+                        page += 1
+                    except Exception as ex:
+                        utils.logger.error(
+                            f"[BaiduTieBaCrawler.search] Search error, page: {page}, "
+                            f"keyword: {keyword}, tieba: {tieba_name}, err: {ex}"
                         )
                         break
-                    utils.logger.info(
-                        f"[BaiduTieBaCrawler.search] Note list len: {len(notes_list)}"
-                    )
-                    await self.get_specified_notes(
-                        note_id_list=[note_detail.note_id for note_detail in notes_list]
-                    )
-
-                    # Sleep after page navigation
-                    await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
-                    utils.logger.info(f"[TieBaCrawler.search] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after page {page}")
-
-                    page += 1
-                except Exception as ex:
-                    utils.logger.error(
-                        f"[BaiduTieBaCrawler.search] Search keywords error, current page: {page}, current keyword: {keyword}, err: {ex}"
-                    )
-                    break
 
     async def get_specified_tieba_notes(self):
         """

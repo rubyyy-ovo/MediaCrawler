@@ -372,6 +372,24 @@ class BaiduTieBaClient(AbstractApiClient):
         self.headers["Cookie"] = cookie_str
         utils.logger.info("[BaiduTieBaClient.update_cookies] Cookie has been updated")
 
+    async def _fetch_html_by_browser(self, url: str) -> str:
+        """Fetch a page's HTML via the browser's fetch API (inherits login cookies)."""
+        await self._ensure_tieba_origin()
+        response = await self.playwright_page.evaluate(
+            """async ({ url }) => {
+                const resp = await fetch(url, {
+                    credentials: "include",
+                    headers: { "Accept": "text/html,*/*" }
+                });
+                const text = await resp.text();
+                return { status: resp.status, text };
+            }""",
+            {"url": url},
+        )
+        if response["status"] != 200:
+            raise Exception(f"Tieba HTML fetch failed, status={response['status']}, url={url}")
+        return response["text"]
+
     async def get_notes_by_keyword(
         self,
         keyword: str,
@@ -423,6 +441,57 @@ class BaiduTieBaClient(AbstractApiClient):
 
         except Exception as e:
             utils.logger.error(f"[BaiduTieBaClient.get_notes_by_keyword] Search failed: {e}")
+            raise
+
+    async def get_notes_by_keyword_in_tieba(
+        self,
+        tieba_name: str,
+        keyword: str,
+        page: int = 1,
+        page_size: int = 10,
+    ) -> List[TiebaNote]:
+        """
+        Search posts by keyword within a specific Tieba bar.
+        Uses /f/search/res (bar-scoped HTML search) so results are limited to that bar.
+        Args:
+            tieba_name: Bar name (with or without trailing 吧)
+            keyword: Keyword to search
+            page: Page number (1-based)
+            page_size: Number of results per page
+        Returns:
+            List[TiebaNote]: Post list
+        """
+        if not self.playwright_page:
+            raise Exception("playwright_page is required for browser-based search")
+
+        kw = tieba_name.removesuffix("吧")
+        pn = (page - 1) * page_size
+        params = {
+            "ie": "utf-8",
+            "kw": kw,
+            "qw": keyword,
+            "rn": page_size,
+            "sm": 1,        # sort by time desc
+            "only_thread": 1,
+            "pn": pn,
+        }
+        url = f"{self._host}/f/search/res?{urlencode(params)}"
+        utils.logger.info(
+            f"[BaiduTieBaClient.get_notes_by_keyword_in_tieba] "
+            f"tieba: {tieba_name}, keyword: {keyword}, page: {page}, url: {url}"
+        )
+
+        try:
+            html_content = await self._fetch_html_by_browser(url)
+            notes = self._page_extractor.extract_search_note_list(html_content)[:page_size]
+            utils.logger.info(
+                f"[BaiduTieBaClient.get_notes_by_keyword_in_tieba] Extracted {len(notes)} posts"
+            )
+            return notes
+        except Exception as e:
+            utils.logger.error(
+                f"[BaiduTieBaClient.get_notes_by_keyword_in_tieba] Search failed: {e}"
+            )
             raise
 
     async def get_note_by_id(self, note_id: str) -> TiebaNote:
