@@ -379,7 +379,6 @@ class BaiduTieBaClient(AbstractApiClient):
         page_size: int = 10,
         sort: SearchSortType = SearchSortType.TIME_DESC,
         note_type: SearchNoteType = SearchNoteType.FIXED_THREAD,
-        tieba_name: Optional[str] = None,
     ) -> List[TiebaNote]:
         """
         Search Tieba posts by keyword (uses Playwright to access page, avoiding API detection)
@@ -389,7 +388,6 @@ class BaiduTieBaClient(AbstractApiClient):
             page_size: Page size
             sort: Result sort method
             note_type: Post type (main thread | main thread + reply mixed mode)
-            tieba_name: If provided, restrict search to this specific 吧 (forum name without "吧")
         Returns:
 
         """
@@ -408,8 +406,6 @@ class BaiduTieBaClient(AbstractApiClient):
             "subapp_type": "pc",
             "_client_type": "20",
         }
-        if tieba_name:
-            params["kw"] = tieba_name
         utils.logger.info(
             f"[BaiduTieBaClient.get_notes_by_keyword] Accessing search API: "
             f"{self._host}/mo/q/search/multsearch?{urlencode(params)}"

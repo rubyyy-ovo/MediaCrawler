@@ -133,7 +133,6 @@ class TieBaCrawler(AbstractCrawler):
             if config.CRAWLER_TYPE == "search":
                 # Search for notes and retrieve their comment information.
                 await self.search()
-                await self.get_specified_tieba_notes()
             elif config.CRAWLER_TYPE == "detail":
                 # Get the information and comments of the specified post
                 await self.get_specified_notes()
@@ -193,7 +192,6 @@ class TieBaCrawler(AbstractCrawler):
                                 page_size=tieba_limit_count,
                                 sort=SearchSortType.TIME_DESC,
                                 note_type=SearchNoteType.FIXED_THREAD,
-                                tieba_name=tieba_name,
                             )
                         )
                         if not notes_list:
@@ -201,6 +199,20 @@ class TieBaCrawler(AbstractCrawler):
                                 f"[BaiduTieBaCrawler.search] Search note list is empty"
                             )
                             break
+                        if tieba_name:
+                            before = len(notes_list)
+                            notes_list = [n for n in notes_list if tieba_name in n.tieba_name]
+                            filtered = before - len(notes_list)
+                            if filtered:
+                                utils.logger.info(
+                                    f"[BaiduTieBaCrawler.search] Filtered out {filtered} notes not in 吧: {tieba_name!r}"
+                                )
+                        if not notes_list:
+                            utils.logger.info(
+                                f"[BaiduTieBaCrawler.search] No matching notes after filtering, continuing"
+                            )
+                            page += 1
+                            continue
                         utils.logger.info(
                             f"[BaiduTieBaCrawler.search] Note list len: {len(notes_list)}"
                         )
