@@ -23,8 +23,13 @@
 TIEBA_SPECIFIED_ID_LIST = []
 
 # Specify a list of Tieba names
+# 填贴吧名称（不含"吧"字），与 tieba.baidu.com/f?kw=xxx 中的 kw 一致
 TIEBA_NAME_LIST = [
-    # "Tomb Robbery Notes"
+    "外卖",      # 外卖吧
+    "美团骑手",  # 美团骑手吧
+    "饿了么骑手",  # 饿了么骑手吧
+    "美团众包",  # 美团众包吧
+    "美团",      # 美团吧
 ]
 
 # Specify Tieba user URL list
